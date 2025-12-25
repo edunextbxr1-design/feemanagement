@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Centre ERP | Kaushal Vikash Kendra</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        :root { 
+            --primary: #1e3a8a; 
+            --bg-light: #f8fafc; 
+            --sidebar-width: 260px;
+        }
+        
+        body { background-color: var(--bg-light); font-family: 'Inter', sans-serif; overflow-x: hidden; }
+
+        /* --- LOGIN SCREEN --- */
+        #loginScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            z-index: 99999; display: flex; justify-content: center; align-items: center;
+            transition: all 0.3s;
+        }
+        .login-card {
+            background: white; padding: 2rem; border-radius: 16px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            width: 90%; max-width: 400px; text-align: center;
+        }
+        .role-selector input[type="radio"] { display: none; }
+        .role-selector label {
+            display: block; padding: 15px; border: 2px solid #e2e8f0; border-radius: 10px;
+            cursor: pointer; transition: 0.2s; color: #64748b; margin-bottom: 10px;
+        }
+        .role-selector input[type="radio"]:checked + label {
+            border-color: var(--primary); background: #eff6ff; color: var(--primary); font-weight: bold;
+        }
+
+        /* --- LAYOUT --- */
+        .wrapper { display: flex; width: 100%; align-items: stretch; filter: blur(5px); pointer-events: none; transition: 0.3s; }
+        .wrapper.logged-in { filter: none; pointer-events: all; }
+        
+        /* Sidebar */
+        #sidebar {
+            min-width: var(--sidebar-width); max-width: var(--sidebar-width);
+            background: var(--primary); color: #fff; min-height: 100vh;
+            display: flex; flex-direction: column;
+            transition: all 0.3s; position: fixed; z-index: 999;
+        }
+        #sidebar.active { margin-left: -260px; }
+        #sidebar .sidebar-header { padding: 25px 20px; background: rgba(0,0,0,0.15); border-bottom: 1px solid rgba(255,255,255,0.1); }
+        #sidebar ul.components { padding: 20px 0; flex-grow: 1; }
+        #sidebar ul li a {
+            padding: 15px 25px; font-size: 0.95rem; display: block; color: rgba(255,255,255,0.8); text-decoration: none; border-left: 4px solid transparent; transition: 0.2s;
+        }
+        #sidebar ul li a:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        #sidebar ul li a.active { background: #fff; color: var(--primary); border-left: 4px solid #3b82f6; font-weight: 700; }
+        
+        .dev-credit { padding: 15px; font-size: 0.7rem; text-align: center; background: rgba(0,0,0,0.2); color: rgba(255,255,255,0.5); }
+
+        /* Content */
+        #content {
+            width: 100%; padding: 20px; min-height: 100vh; transition: all 0.3s;
+            margin-left: var(--sidebar-width); display: flex; flex-direction: column;
+        }
+        #content.active { margin-left: 0; }
+
+        /* --- TOPBAR & RESPONSIVE HEADER --- */
+        .topbar { background: white; padding: 15px 25px; border-radius: 12px; box-shadow: 0 2px 15px rgba(0,0,0,0.03); margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .toggle-btn { background: none; border: none; font-size: 1.4rem; color: var(--primary); cursor: pointer; }
+        
+        /* Network Status Badge */
+        .status-badge { font-size: 0.85rem; font-weight: 600; padding: 8px 15px; border-radius: 50px; transition: all 0.3s; white-space: nowrap; }
+        .status-online { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .status-offline { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+        /* --- MOBILE TWEAKS --- */
+        @media (max-width: 768px) {
+            #sidebar { margin-left: -260px; }
+            #sidebar.active { margin-left: 0; }
+            #content { margin-left: 0; padding: 10px; }
+            .topbar { padding: 10px 15px; margin-bottom: 15px; border-radius: 0 0 12px 12px; }
+            .topbar h5 { font-size: 1rem; }
+            .topbar small { display: none; } 
+            .toggle-btn { font-size: 1.2rem; margin-right: 10px !important; }
+            .status-badge { font-size: 0.7rem; padding: 5px 10px; }
+            .status-text-mobile { display: none; }
+        }
+
+        /* Cards & UI */
+        .card-erp { background: white; border: none; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); padding: 1.5rem; margin-bottom: 1.5rem; }
+        .page-title { font-weight: 800; color: #1e293b; margin-bottom: 25px; font-size: 1.5rem; letter-spacing: -0.5px; }
+        
+        /* Dashboard Stats */
+        .stat-box { padding: 25px; border-radius: 16px; color: white; position: relative; overflow: hidden; height: 100%; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .stat-value { font-size: 2rem; font-weight: 800; margin: 5px 0; }
+        .stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
+        
+        .bg-green { background: linear-gradient(135deg, #10b981, #059669); } 
+        .bg-red { background: linear-gradient(135deg, #ef4444, #dc2626); } 
+        .bg-dark { background: linear-gradient(135deg, #334155, #1e293b); } 
+
+        /* Tables */
+        .table-erp { margin-bottom: 0; }
+        .table-erp thead { background: #f1f5f9; color: #475569; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .table-erp th { padding: 15px 10px; border-bottom: 2px solid #e2e8f0; }
+        .table-erp td { font-size: 0.9rem; padding: 12px 10px; border-bottom: 1px solid #f1f5f9; }
+        
+        .badge-status { padding: 5px 12px; border-radius: 50px; font-size: 0.7rem; font-weight: 700; }
+        .badge-paid { background: #dcfce7; color: #166534; }
+        .badge-due { background: #fee2e2; color: #991b1b; }
+
+        /* Loader */
+        #loadingOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; }
+        
+        .hidden-section { display: none; }
+        .btn-icon { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; transition: 0.2s; }
+        .content-footer { margin-top: auto; text-align: center; padding: 20px; color: #94a3b8; font-size: 0.8rem; border-top: 1px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+
+    <div id="loginScreen">
+        <div class="login-card">
+            <h4 class="fw-bold text-primary mb-4">Kaushal Vikash Kendra</h4>
+            <p class="text-muted small mb-4">Select your role and enter password</p>
+            
+            <form id="loginForm">
+                <div class="row g-2 mb-3 role-selector">
+                    <div class="col-6">
+                        <input type="radio" name="role" id="roleAdmin" value="admin" checked>
+                        <label for="roleAdmin"><i class="fas fa-user-shield mb-2 d-block fs-3"></i>Admin</label>
+                    </div>
+                    <div class="col-6">
+                        <input type="radio" name="role" id="roleUser" value="user">
+                        <label for="roleUser"><i class="fas fa-users mb-2 d-block fs-3"></i>User</label>
+                    </div>
+                </div>
+
+                <div class="form-floating mb-4">
+                    <input type="password" class="form-control" id="loginPass" placeholder="Enter Password" required>
+                    <label>Password</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm">
+                    Access Dashboard <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" style="display:none;">
+        <div class="spinner-border text-primary mb-3"></div>
+        <h6 class="fw-bold text-secondary">Syncing Database...</h6>
+    </div>
+
+    <div class="wrapper" id="mainWrapper">
+        <nav id="sidebar">
+            <div class="sidebar-header">
+                <h5 class="fw-bold m-0">Centre ERP</h5>
+                <small style="opacity: 0.7; font-size: 0.75rem;">Kaushal Vikash Kendra</small>
+            </div>
+
+            <ul class="list-unstyled components">
+                <li><a href="#" onclick="showSection('dashboard', this)" class="active"><i class="fas fa-th-large me-3"></i>Dashboard</a></li>
+                <li><a href="#" onclick="showSection('fees', this)"><i class="fas fa-user-graduate me-3"></i>Fee Collection</a></li>
+                <li><a href="#" onclick="showSection('expenses', this)"><i class="fas fa-wallet me-3"></i>Finance & Expense</a></li>
+                <li><a href="#" onclick="showSection('reports', this)"><i class="fas fa-file-alt me-3"></i>Reports Center</a></li>
+                <li style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <a href="#" onclick="logout()" class="text-danger-light"><i class="fas fa-sign-out-alt me-3"></i>Logout</a>
+                </li>
+            </ul>
+
+            <div class="dev-credit">
+                Designed and Developed By<br>
+                <strong>Ira Education & IT Solutions Pvt. Ltd.</strong>
+            </div>
+        </nav>
+
+        <div id="content">
+            
+            <nav class="topbar">
+                <div class="d-flex align-items-center">
+                    <button type="button" id="sidebarCollapse" class="toggle-btn me-3"><i class="fas fa-bars"></i></button>
+                    <div>
+                        <h5 class="m-0 fw-bold text-primary">Kaushal Vikash Kendra</h5>
+                        <small class="text-muted">Simri Nagpura Road | Near Karubir Baba Temple</small>
+                    </div>
+                </div>
+                <div>
+                    <span id="networkStatus" class="status-badge status-online">
+                        <i class="fas fa-wifi me-2"></i> <span class="status-text-mobile">Online</span>
+                    </span>
+                </div>
+            </nav>
+
+            <div id="sec-dashboard">
+                <h3 class="page-title">Dashboard Overview</h3>
+                
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="stat-box bg-green">
+                            <div class="stat-label">Total Inflow (Fee + Capital)</div>
+                            <div class="stat-value" id="dashTotalIn">₹0</div>
+                            <div class="small opacity-75 border-top border-white border-opacity-25 pt-2 mt-2" id="dashBreakdown">
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-box bg-red">
+                            <div class="stat-label">Total Outflow (Expenses)</div>
+                            <div class="stat-value" id="dashExp">₹0</div>
+                            <div class="small opacity-75 border-top border-white border-opacity-25 pt-2 mt-2">
+                                <i class="fas fa-arrow-up"></i> All Expenses & Debits
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-box bg-dark">
+                            <div class="stat-label">Net Cash Balance</div>
+                            <div class="stat-value" id="dashBal">₹0</div>
+                            <div class="small opacity-75 border-top border-white border-opacity-25 pt-2 mt-2">
+                                <i class="fas fa-wallet"></i> Current Cash in Hand
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card-erp">
+                            <h6 class="fw-bold text-secondary mb-4">Batch-wise Fee Collection</h6>
+                            <div style="height: 300px;"><canvas id="batchChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card-erp h-100">
+                            <h6 class="fw-bold text-secondary mb-4">Quick Actions</h6>
+                            <button onclick="showSection('fees', document.querySelectorAll('#sidebar a')[1])" class="btn btn-primary w-100 mb-3 text-start py-3 shadow-sm"><i class="fas fa-plus-circle me-3"></i>New Admission Fee</button>
+                            <button onclick="showSection('expenses', document.querySelectorAll('#sidebar a')[2])" class="btn btn-danger w-100 mb-3 text-start py-3 shadow-sm"><i class="fas fa-minus-circle me-3"></i>Record Expense</button>
+                            <button onclick="generateDuesReport()" class="btn btn-dark w-100 text-start py-3 shadow-sm"><i class="fas fa-list-alt me-3"></i>Download Dues List</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sec-fees" class="hidden-section">
+                <h3 class="page-title">Fee Collection</h3>
+                
+                <div class="card-erp border-start border-4 border-primary">
+                    <div class="d-flex justify-content-between mb-4">
+                        <h5 class="fw-bold text-primary m-0" id="feeFormTitle"><i class="fas fa-user-plus me-2"></i>New Fee Entry</h5>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="resetFeeForm()">Reset Form</button>
+                    </div>
+                    <form id="feeForm">
+                        <input type="hidden" id="feeEditId">
+                        <div class="row g-3">
+                            <div class="col-md-3"><div class="form-floating"><input type="text" class="form-control" id="sName" required placeholder="Name"><label>Student Name</label></div></div>
+                            <div class="col-md-3"><div class="form-floating"><input type="text" class="form-control" id="fName" required placeholder="Father"><label>Father's Name</label></div></div>
+                            <div class="col-md-3"><div class="form-floating"><input type="tel" class="form-control" id="sPhone" required placeholder="Mobile" pattern="[0-9]{10}"><label>Mobile No</label></div></div>
+                            <div class="col-md-3"><div class="form-floating"><input type="text" class="form-control" id="village" required placeholder="Village" list="villageList"><label>Village</label><datalist id="villageList"></datalist></div></div>
+                            
+                            <div class="col-md-3"><div class="form-floating"><select class="form-select" id="course" required><option>KYP</option><option>BS-CIT</option><option>BS-CLS</option><option>BS-CSS</option><option>Other</option></select><label>Course</label></div></div>
+                            <div class="col-md-3"><div class="form-floating"><input type="text" class="form-control" id="batch" required placeholder="Batch" list="batchList"><label>Batch</label><datalist id="batchList"></datalist></div></div>
+                            <div class="col-md-3"><div class="form-floating"><input type="number" class="form-control" id="amount" max="1000" required placeholder="Amount"><label>Amount Paid</label></div></div>
+                            <div class="col-md-3"><div class="form-floating"><input type="text" class="form-control" id="recBy" required placeholder="Staff"><label>Received By</label></div></div>
+                        </div>
+                        <button type="submit" id="btnFeeSubmit" class="btn btn-primary w-100 mt-4 fw-bold py-2 shadow-sm"><i class="fas fa-save me-2"></i>Save Fee Record</button>
+                    </form>
+                </div>
+
+                <div class="card-erp">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold m-0 text-secondary">Recent Transactions</h6>
+                        <div class="input-group w-auto">
+                            <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                            <input type="text" id="feeSearch" class="form-control border-start-0 ps-0" placeholder="Search student..." onkeyup="renderFeeTable()">
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle table-erp">
+                            <thead><tr><th>Details</th><th>Student Info</th><th>Batch</th><th>Amt</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                            <tbody id="feeTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sec-expenses" class="hidden-section">
+                <h3 class="page-title">Finance & Expenses</h3>
+                
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card-erp">
+                            <h6 class="fw-bold text-secondary mb-3"><i class="fas fa-pen-square me-2"></i>Add Entry</h6>
+                            <form id="expenseForm">
+                                <input type="hidden" id="expEditId">
+                                
+                                <div class="btn-group w-100 mb-3" role="group">
+                                    <input type="radio" class="btn-check" name="transType" id="typeExp" value="debit" checked onchange="toggleExpType()">
+                                    <label class="btn btn-outline-danger" for="typeExp">Expense (Out)</label>
+                                    <input type="radio" class="btn-check" name="transType" id="typeInc" value="credit" onchange="toggleExpType()">
+                                    <label class="btn btn-outline-success" for="typeInc">Capital (In)</label>
+                                </div>
+
+                                <div class="form-floating mb-2"><input type="date" class="form-control" id="expDate" required><label>Date</label></div>
+                                <div class="form-floating mb-2"><input type="text" class="form-control" id="expDesc" required placeholder="Desc"><label>Description</label></div>
+                                
+                                <div class="form-floating mb-2">
+                                    <select class="form-select" id="expCat" required>
+                                        <option value="Diesel">Diesel</option>
+                                        <option value="Rent">Rent</option>
+                                        <option value="Salary">Salary</option>
+                                        <option value="Electricity">Electricity</option>
+                                        <option value="Refreshment">Refreshment</option>
+                                        <option value="Maintenance">Maintenance</option>
+                                        <option value="Office Supplies">Office Supplies</option>
+                                        <option value="Deposit to Bank">Deposit to Bank</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <label>Category</label>
+                                </div>
+
+                                <div class="form-floating mb-2"><input type="number" class="form-control" id="expAmount" required placeholder="Amount"><label>Amount</label></div>
+                                <div class="form-floating mb-3"><input type="text" class="form-control" id="expBy" required placeholder="Name"><label id="lblExpBy">Paid By</label></div>
+                                
+                                <button type="submit" id="btnExpSubmit" class="btn btn-danger w-100 fw-bold py-2">Record Transaction</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card-erp h-100">
+                            <h6 class="fw-bold text-secondary mb-3"><i class="fas fa-book me-2"></i>Ledger Book</h6>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle table-erp">
+                                    <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amt</th><th class="text-end">Opt</th></tr></thead>
+                                    <tbody id="expTable"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sec-reports" class="hidden-section">
+                <h3 class="page-title">Reports & Analytics</h3>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="card-erp h-100 border-start border-4 border-primary">
+                            <h5 class="fw-bold mb-3 text-primary"><i class="fas fa-certificate me-2"></i>Utilization Certificate</h5>
+                            <p class="text-muted small mb-3">Generate a formal audit report showing Opening Balance, Total Inflow (Fee + Capital), Total Outflow, and Closing Balance.</p>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6"><label class="small fw-bold text-muted">From Date</label><input type="date" id="ucStart" class="form-control"></div>
+                                <div class="col-6"><label class="small fw-bold text-muted">To Date</label><input type="date" id="ucEnd" class="form-control"></div>
+                            </div>
+                            <button onclick="generateUC()" class="btn btn-primary w-100 py-2"><i class="fas fa-file-download me-2"></i>Generate UC PDF</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card-erp h-100">
+                            <h5 class="fw-bold mb-3 text-secondary"><i class="fas fa-list-ul me-2"></i>Operational Lists</h5>
+                            <div class="input-group mb-4">
+                                <select id="repBatch" class="form-select"><option>Loading Batches...</option></select>
+                                <button onclick="genBatchRep()" class="btn btn-dark"><i class="fas fa-download"></i></button>
+                            </div>
+                            <button onclick="generateDuesReport()" class="btn btn-outline-danger w-100 mb-3"><i class="fas fa-exclamation-circle me-2"></i> Download Dues List</button>
+                            <button onclick="exportData()" class="btn btn-outline-secondary w-100"><i class="fas fa-database me-2"></i> Export All Data (Backup)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-footer">
+                Designed and Developed By <strong>Ira Education & IT Solutions Pvt. Ltd.</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="profModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Student History</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body" id="profBody"></div></div></div></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // --- CREDENTIALS ---
+    const CREDENTIALS = {
+        admin: '0202',
+        user: '1010'
+    };
+    
+    // Global State
+    window.currentUserRole = null; 
+
+    // --- LOGIN FUNCTION ---
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const role = document.querySelector('input[name="role"]:checked').value;
+        const pass = document.getElementById('loginPass').value;
+        
+        if(pass === CREDENTIALS[role]) {
+            window.currentUserRole = role;
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainWrapper').classList.add('logged-in');
+            document.getElementById('loginPass').value = ''; 
+            
+            // Try to refresh tables if module is loaded
+            if(window.renderFeeTable) window.renderFeeTable();
+            if(window.renderExpTable) window.renderExpTable();
+        } else {
+            alert("Wrong Password! Please try again.");
+            document.getElementById('loginPass').value = '';
+        }
+    });
+
+    // --- LOGOUT FUNCTION ---
+    window.logout = () => {
+        if(confirm("Are you sure you want to logout?")) {
+            window.currentUserRole = null;
+            document.getElementById('mainWrapper').classList.remove('logged-in');
+            document.getElementById('loginScreen').style.display = 'flex';
+        }
+    }
+
+    // --- NAVIGATION ---
+    document.getElementById('sidebarCollapse').addEventListener('click', () => {
+        document.getElementById('sidebar').classList.toggle('active');
+        document.getElementById('content').classList.toggle('active');
+    });
+
+    window.showSection = (secId, link) => {
+        ['dashboard', 'fees', 'expenses', 'reports'].forEach(id => document.getElementById('sec-'+id).style.display = 'none');
+        document.getElementById('sec-'+secId).style.display = 'block';
+        document.querySelectorAll('#sidebar a').forEach(a => a.classList.remove('active'));
+        if(link) link.classList.add('active');
+        
+        // Mobile Fix
+        if(window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.remove('active');
+            document.getElementById('content').classList.remove('active');
+        }
+        
+        if(secId === 'dashboard' && window.renderBatchChart) { 
+            window.renderBatchChart(); 
+            window.updateDashboard(); 
+        }
+    }
+</script>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+    import { getDatabase, ref, push, update, remove, onValue } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+    // -----------------------------------------------------------
+    // PASTE FIREBASE KEYS HERE
+    // -----------------------------------------------------------
+    const firebaseConfig = {
+         apiKey: "AIzaSyBV2Fo-bpOmLim6GD4Xx_KcrBsdqcVQmj0",
+        authDomain: "center-manager-bfcf8.firebaseapp.com",
+        databaseURL: "https://center-manager-bfcf8-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        projectId: "center-manager-bfcf8",
+        storageBucket: "center-manager-bfcf8.firebasestorage.app",
+        messagingSenderId: "180349108976",
+        appId: "1:180349108976:web:6278a5f680b0d9e3b53835"
+    };
+
+    let app, db, feeRef, expRef;
+
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+        feeRef = ref(db, 'fees');
+        expRef = ref(db, 'expenses');
+    } catch (e) {
+        console.error("Firebase Connection Failed. Check Keys.", e);
+        document.querySelector('.login-card').innerHTML += `<div class="alert alert-danger mt-3">Database Error: API Keys Missing</div>`;
+    }
+
+    let transactions = [], expenses = [], chartInstance = null;
+    const { jsPDF } = window.jspdf;
+
+    // --- NETWORK STATUS ---
+    const updateNetworkStatus = (isOnline) => {
+        const badge = document.getElementById('networkStatus');
+        if(isOnline) {
+            badge.className = "status-badge status-online";
+            badge.innerHTML = '<i class="fas fa-wifi me-2"></i> <span class="status-text-mobile">Online</span>';
+        } else {
+            badge.className = "status-badge status-offline";
+            badge.innerHTML = '<i class="fas fa-wifi-slash me-2"></i> Offline';
+        }
+    };
+    window.addEventListener('online', () => updateNetworkStatus(true));
+    window.addEventListener('offline', () => updateNetworkStatus(false));
+    
+    // --- READ DATA ---
+    if(feeRef) {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        onValue(feeRef, (snap) => {
+            transactions = [];
+            const data = snap.val();
+            if(data) Object.keys(data).forEach(k => transactions.push({id:k, ...data[k]}));
+            transactions.sort((a,b) => b.timestamp - a.timestamp);
+            window.renderFeeTable();
+            window.updateAutoComplete();
+            window.renderBatchChart();
+            window.updateDashboard();
+            window.updateBatchList();
+            document.getElementById('loadingOverlay').style.display = 'none';
+        });
+
+        onValue(expRef, (snap) => {
+            expenses = [];
+            const data = snap.val();
+            if(data) Object.keys(data).forEach(k => expenses.push({id:k, ...data[k]}));
+            expenses.sort((a,b) => b.timestamp - a.timestamp);
+            window.renderExpTable();
+            window.updateDashboard();
+        });
+    }
+
+    // --- FEE SUBMIT ---
+    document.getElementById('feeForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = document.getElementById('feeEditId').value;
+        const amt = parseFloat(document.getElementById('amount').value);
+        
+        if(!id) {
+            const prev = window.getStudentTotal(document.getElementById('sName').value, document.getElementById('batch').value);
+            if((prev+amt)>1000) return alert(`Max allowed: ₹${1000-prev}`);
+        }
+
+        const data = {
+            receiptNo: id ? undefined : "SDC-" + Math.floor(100000 + Math.random() * 900000),
+            dateStr: new Date().toLocaleDateString('en-IN'),
+            studentName: document.getElementById('sName').value,
+            fatherName: document.getElementById('fName').value,
+            studentPhone: document.getElementById('sPhone').value,
+            village: document.getElementById('village').value,
+            course: document.getElementById('course').value,
+            batch: document.getElementById('batch').value,
+            amount: amt, 
+            receivedBy: document.getElementById('recBy').value,
+            timestamp: Date.now()
+        };
+
+        if(id) { delete data.receiptNo; update(ref(db,'fees/'+id), data).then(()=>{ alert("Updated"); window.resetFeeForm(); }); }
+        else { push(feeRef, data).then((snap)=>{ data.id=snap.key; window.generatePDF(data); window.resetFeeForm(); }); }
+    });
+
+    window.resetFeeForm = () => {
+        document.getElementById('feeForm').reset();
+        document.getElementById('feeEditId').value = "";
+        document.getElementById('feeFormTitle').innerHTML = '<i class="fas fa-user-plus me-2"></i>New Fee Entry';
+        document.getElementById('btnFeeSubmit').innerHTML = '<i class="fas fa-save me-2"></i>Save Fee Record';
+    }
+
+    // --- RENDER FEE TABLE ---
+    window.renderFeeTable = () => {
+        const tbody = document.getElementById('feeTable');
+        const s = document.getElementById('feeSearch').value.toLowerCase();
+        tbody.innerHTML='';
+        
+        transactions.filter(t=>t.studentName.toLowerCase().includes(s) || (t.studentPhone && t.studentPhone.includes(s))).slice(0,50).forEach(t=>{
+            const tot = window.getStudentTotal(t.studentName, t.batch);
+            const due = 1000 - tot;
+            
+            let badge = '';
+            let payBtn = '';
+            
+            if(tot >= 1000) {
+                 badge = '<span class="badge-status badge-paid">Settled</span>';
+            } else {
+                 badge = `<span class="badge-status badge-due">Due: ₹${due}</span>`;
+                 payBtn = `<button class="btn btn-icon btn-light text-dark" title="Pay Remaining Dues" onclick='fillPayDue(${JSON.stringify(t)}, ${due})'><i class="fas fa-hand-holding-usd"></i></button>`;
+            }
+
+            // CHECK PERMISSION FOR DELETE
+            const delBtn = window.currentUserRole === 'admin' 
+                ? `<button class="btn btn-icon btn-light text-danger" onclick="delItem('fees','${t.id}')"><i class="fas fa-trash"></i></button>`
+                : '';
+
+            tbody.innerHTML += `<tr>
+                <td><small>${t.dateStr}</small><br><span class="text-muted small">${t.receiptNo}</span></td>
+                <td><a href="#" onclick="viewProf('${t.studentName}')" class="fw-bold text-decoration-none">${t.studentName}</a><br><small>${t.fatherName}</small></td>
+                <td>${t.batch}</td>
+                <td class="fw-bold">₹${t.amount}</td>
+                <td>${badge}</td>
+                <td class="text-end">
+                    ${payBtn} 
+                    <button class="btn btn-icon btn-light text-primary" onclick='generatePDF(${JSON.stringify(t)})'><i class="fas fa-print"></i></button>
+                    <button class="btn btn-icon btn-light text-success" onclick='shareWA(${JSON.stringify(t)})'><i class="fab fa-whatsapp"></i></button>
+                    <button class="btn btn-icon btn-light text-warning" onclick="editFee('${t.id}')"><i class="fas fa-pen"></i></button>
+                    ${delBtn}
+                </td>
+            </tr>`;
+        });
+    }
+
+    // --- FILL PAY DUE ---
+    window.fillPayDue = (t, dueAmount) => {
+        window.resetFeeForm();
+        document.getElementById('sName').value = t.studentName;
+        document.getElementById('fName').value = t.fatherName;
+        document.getElementById('sPhone').value = t.studentPhone;
+        document.getElementById('village').value = t.village;
+        document.getElementById('course').value = t.course;
+        document.getElementById('batch').value = t.batch;
+        document.getElementById('amount').value = dueAmount;
+        document.getElementById('sec-fees').scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('amount').focus();
+        document.getElementById('feeFormTitle').innerHTML = '<i class="fas fa-hand-holding-usd me-2"></i>Paying Due Amount';
+    }
+
+    // --- EXPENSES ---
+    window.toggleExpType = () => {
+        const isInc = document.getElementById('typeInc').checked;
+        const btn = document.getElementById('btnExpSubmit');
+        const cat = document.getElementById('expCat');
+        
+        if(isInc) { 
+            btn.className="btn btn-success w-100 fw-bold"; btn.innerText="Add Capital"; 
+            document.getElementById('lblExpBy').innerText="Source";
+            cat.innerHTML = `<option value="Capital Introduced">Capital Introduced</option><option value="Loan">Loan</option><option value="Other Income">Other Income</option>`;
+        } else { 
+            btn.className="btn btn-danger w-100 fw-bold"; btn.innerText="Record Expense"; 
+            document.getElementById('lblExpBy').innerText="Paid By";
+            cat.innerHTML = `<option value="Diesel">Diesel</option><option value="Rent">Rent</option><option value="Salary">Salary</option><option value="Electricity">Electricity</option><option value="Refreshment">Refreshment</option><option value="Maintenance">Maintenance</option><option value="Office Supplies">Office Supplies</option><option value="Deposit to Bank">Deposit to Bank</option><option value="Other">Other</option>`;
+        }
+    }
+
+    document.getElementById('expenseForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const type = document.getElementById('typeInc').checked ? 'credit' : 'debit';
+        const data = {
+            date: document.getElementById('expDate').value,
+            desc: document.getElementById('expDesc').value,
+            category: document.getElementById('expCat').value,
+            amount: parseFloat(document.getElementById('expAmount').value),
+            paidBy: document.getElementById('expBy').value,
+            type: type,
+            timestamp: Date.now()
+        };
+        push(expRef, data).then(()=>{ alert("Saved"); document.getElementById('expenseForm').reset(); window.toggleExpType(); });
+    });
+
+    window.renderExpTable = () => {
+        const tb = document.getElementById('expTable'); tb.innerHTML='';
+        expenses.forEach(x => {
+            const isCr = x.type==='credit';
+            const delBtn = window.currentUserRole === 'admin' 
+                ? `<button class="btn btn-sm text-danger" onclick="delItem('expenses','${x.id}')"><i class="fas fa-trash"></i></button>`
+                : '';
+            tb.innerHTML += `<tr>
+                <td>${x.date}</td>
+                <td>${x.desc}<br><small class="text-muted">${x.category}</small></td>
+                <td><span class="badge ${isCr?'bg-success':'bg-danger'}">${isCr?'INC':'EXP'}</span></td>
+                <td class="${isCr?'text-success':'text-danger'} fw-bold">${x.amount}</td>
+                <td class="text-end">${delBtn}</td>
+            </tr>`;
+        });
+    }
+
+    // --- UTILS ---
+    window.getStudentTotal = (n,b) => transactions.filter(t => t.studentName===n && t.batch===b).reduce((s,t)=>s+parseFloat(t.amount),0);
+    
+    window.editFee = (id) => {
+        const t = transactions.find(x => x.id===id); if(!t) return;
+        document.getElementById('feeEditId').value=id;
+        document.getElementById('sName').value=t.studentName;
+        document.getElementById('fName').value=t.fatherName;
+        document.getElementById('sPhone').value=t.studentPhone;
+        document.getElementById('village').value=t.village;
+        document.getElementById('course').value=t.course;
+        document.getElementById('batch').value=t.batch;
+        document.getElementById('amount').value=t.amount;
+        document.getElementById('recBy').value=t.receivedBy;
+        document.getElementById('feeFormTitle').innerText="Edit Record";
+        document.getElementById('btnFeeSubmit').innerText="Update";
+    }
+
+    window.delItem = (node, id) => { 
+        if(confirm("Are you sure you want to DELETE this record?")) {
+            remove(ref(db, `${node}/${id}`))
+            .then(() => alert("Deleted Successfully!"))
+            .catch((error) => alert("Error: " + error.message));
+        }
+    }
+
+    window.updateDashboard = () => {
+        const fi = transactions.reduce((s,t)=>s+parseFloat(t.amount),0);
+        const cl = expenses.filter(e=>e.type==='credit').reduce((s,e)=>s+parseFloat(e.amount),0);
+        const te = expenses.filter(e=>e.type==='debit').reduce((s,e)=>s+parseFloat(e.amount),0);
+        
+        document.getElementById('dashTotalIn').innerText = '₹' + (fi + cl).toLocaleString('en-IN');
+        document.getElementById('dashExp').innerText = '₹' + te.toLocaleString('en-IN');
+        document.getElementById('dashBal').innerText = '₹' + ((fi+cl)-te).toLocaleString('en-IN');
+        document.getElementById('dashBreakdown').innerHTML = 
+            `Fees: <b>₹${fi.toLocaleString('en-IN')}</b> &nbsp;|&nbsp; Capital: <b>₹${cl.toLocaleString('en-IN')}</b>`;
+    }
+
+    window.updateAutoComplete = () => {
+        const vL = document.getElementById('villageList'); vL.innerHTML='';
+        [...new Set(transactions.map(t=>t.village))].forEach(v=>vL.innerHTML+=`<option value="${v}">`);
+        const bL = document.getElementById('batchList'); bL.innerHTML='';
+        [...new Set(transactions.map(t=>t.batch))].forEach(b=>bL.innerHTML+=`<option value="${b}">`);
+    }
+
+    window.updateBatchList = () => {
+        const s = document.getElementById('repBatch'); s.innerHTML='<option selected disabled>Select Batch...</option>';
+        [...new Set(transactions.map(t=>t.batch))].forEach(b=>s.innerHTML+=`<option value="${b}">${b}</option>`);
+    }
+
+    window.renderBatchChart = () => {
+        const d = {}; transactions.forEach(t => { d[t.batch] = (d[t.batch]||0) + parseFloat(t.amount); });
+        const ctx = document.getElementById('batchChart').getContext('2d');
+        if(chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(d), datasets: [{ label: 'Fees', data: Object.values(d), backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+    }
+
+    window.generatePDF = (data) => {
+        const doc = new jsPDF();
+        const totalPaidSoFar = window.getStudentTotal(data.studentName, data.batch); 
+        const currentAmount = parseFloat(data.amount);
+        const remainingDue = 1000 - totalPaidSoFar;
+        
+        const orgName = "KAUSHAL VIKASH KENDRA";
+        const orgAddr = "Near Karubir Baba Temple, Simri Nagpura Road, Simri, Buxar";
+        const orgPhone = "Mobile: 9939056259";
+
+        doc.setDrawColor(30, 58, 138); doc.setLineWidth(1); doc.rect(5, 5, 200, 138); 
+        doc.setFillColor(30, 58, 138); doc.rect(5, 5, 200, 28, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+        doc.text(orgName, 105, 18, null, null, "center");
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+        doc.text(orgAddr, 105, 24, null, null, "center"); doc.text(orgPhone, 105, 29, null, null, "center");
+
+        doc.setTextColor(0, 0, 0); doc.setFontSize(10);
+        doc.text(`Receipt No: ${data.receiptNo || 'Pending'}`, 10, 42); doc.text(`Date: ${data.dateStr}`, 150, 42);
+        doc.line(5, 45, 205, 45); 
+
+        doc.autoTable({
+            startY: 48, margin: { left: 10 }, tableWidth: 190, theme: 'plain', styles: { fontSize: 11, cellPadding: 1.5 },
+            columnStyles: { 0: { fontStyle: 'bold', width: 40 }, 2: { fontStyle: 'bold', width: 30 } },
+            body: [
+                ['Student Name :', data.studentName.toUpperCase(), 'Course :', data.course],
+                ['Father Name :', data.fatherName, 'Batch :', data.batch],
+                ['Village/Address :', data.village, 'Mobile :', data.studentPhone || 'N/A'],
+            ],
+        });
+
+        const finalY = doc.lastAutoTable.finalY + 5;
+        doc.setFillColor(245, 247, 250); doc.setDrawColor(200); doc.rect(10, finalY, 190, 25, 'FD');
+        doc.setFontSize(10); doc.setTextColor(100); doc.text("Payment Breakdown", 15, finalY + 6);
+        doc.setTextColor(0); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+        doc.text(`Amount Paid: Rs. ${currentAmount}/-`, 20, finalY + 16);
+        
+        doc.setFontSize(10);
+        if(remainingDue <= 0) {
+            doc.setTextColor(22, 101, 52); doc.text("STATUS: FULLY PAID", 150, finalY + 16);
+        } else {
+            doc.setTextColor(185, 28, 28); doc.text(`Balance Due: Rs. ${remainingDue}/-`, 150, finalY + 16);
+        }
+        doc.setFontSize(8); doc.setTextColor(100); doc.text(`Total Paid to Date: Rs. ${totalPaidSoFar}/-`, 20, finalY + 22);
+
+        const footerY = 125;
+        doc.setFontSize(9); doc.setTextColor(0);
+        doc.text(`Received By: ${data.receivedBy}`, 15, footerY); doc.text("Authorized Signature", 160, footerY);
+        doc.setDrawColor(0); doc.line(155, footerY - 5, 195, footerY - 5);
+        doc.setFontSize(7); doc.setTextColor(150);
+        doc.text("* Note: Security money will be refunded by BSDM upon successful completion of KYP course.", 105, 135, null, null, "center");
+        doc.text("Designed by Ira Education & IT Solutions Pvt. Ltd.", 105, 140, null, null, "center");
+        doc.save(`${data.studentName}_Receipt.pdf`);
+    }
+
+    window.generateUC = () => {
+        const s = document.getElementById('ucStart').value; const e = document.getElementById('ucEnd').value;
+        if(!s||!e) return alert("Select Dates");
+        const start=new Date(s), end=new Date(e);
+        let ob=0, inf=0, out=0, led=[];
+        const pD = (str) => str.includes('-') ? new Date(str) : new Date(str.split('/').reverse().join('-'));
+
+        transactions.forEach(t=>{ const d=pD(t.dateStr); if(d<start) ob+=parseFloat(t.amount); else if(d>=start && d<=end) { inf+=parseFloat(t.amount); led.push([t.dateStr, `Fee: ${t.studentName}`, 'Credit', t.amount, '-']); } });
+        expenses.forEach(x=>{ const d=new Date(x.date); if(d<start) { if(x.type==='credit') ob+=parseFloat(x.amount); else ob-=parseFloat(x.amount); } else if(d>=start && d<=end) { if(x.type==='credit') { inf+=parseFloat(x.amount); led.push([x.date, `Cap: ${x.desc}`, 'Credit', x.amount, '-']); } else { out+=parseFloat(x.amount); led.push([x.date, `Exp: ${x.desc}`, 'Debit', '-', x.amount]); } } });
+
+        const doc = new jsPDF();
+        doc.setFontSize(16); doc.text("UTILIZATION CERTIFICATE", 105, 20, null,null,"center");
+        doc.setFontSize(10); doc.text(`Period: ${s} to ${e}`, 105, 28, null,null,"center");
+        doc.autoTable({ startY:40, head:[['Summary','Amount']], body:[['Opening Bal',ob.toFixed(2)],['Inflow',inf.toFixed(2)],['Outflow',out.toFixed(2)],['Closing Bal',(ob+inf-out).toFixed(2)]] });
+        doc.text("Detailed Ledger", 14, doc.lastAutoTable.finalY+10);
+        doc.autoTable({ startY:doc.lastAutoTable.finalY+15, head:[['Date','Desc','Type','In','Out']], body:led });
+        doc.save("UC.pdf");
+    }
+
+    window.viewProf = (n) => {
+        const h = transactions.filter(t=>t.studentName===n);
+        if(!h.length) return;
+        const tot = h.reduce((s,t)=>s+parseFloat(t.amount),0);
+        let html = `<h5>${n} <span class="badge bg-primary">Total: ₹${tot}</span></h5><p class="small text-muted">${h[0].fatherName} | ${h[0].studentPhone}</p><table class="table table-sm"><thead><tr><th>Date</th><th>Batch</th><th>Amt</th></tr></thead><tbody>`;
+        h.forEach(x => html+=`<tr><td>${x.dateStr}</td><td>${x.batch}</td><td>${x.amount}</td></tr>`);
+        html+=`</tbody></table>`;
+        document.getElementById('profBody').innerHTML=html;
+        new bootstrap.Modal(document.getElementById('profModal')).show();
+    }
+
+    window.shareWA = (t) => {
+        const totalPaid = window.getStudentTotal(t.studentName, t.batch);
+        const rem = 1000 - totalPaid;
+        let msg = "";
+        if (rem <= 0) {
+            msg = `*FEE CLEARED - KAUSHAL VIKASH KENDRA* %0A%0A`;
+            msg += `Dear *${t.studentName}*,%0A`;
+            msg += `We have received your payment of *₹${t.amount}*.%0A%0A`;
+            msg += `✅ *Status:* FULLY PAID%0A`;
+            msg += `🎉 Your full security deposit of ₹1000 is settled.%0A%0A`;
+            msg += `_Simri Nagpura Road, Buxar_`;
+        } else {
+            msg = `*PAYMENT RECEIPT - KAUSHAL VIKASH KENDRA* %0A%0A`;
+            msg += `Dear *${t.studentName}*,%0A`;
+            msg += `Received: *₹${t.amount}* 💵%0A`;
+            msg += `Batch: ${t.batch}%0A`;
+            msg += `-----------------------------%0A`;
+            msg += `🔸 *Remaining Dues: ₹${rem}*%0A`;
+            msg += `-----------------------------%0A%0A`;
+            msg += `Please pay the balance soon.%0A`;
+            msg += `_Thank You!_`;
+        }
+        const url = `https://wa.me/${t.studentPhone?('91'+t.studentPhone):''}?text=${msg}`;
+        window.open(url, '_blank');
+    }
+
+    window.genBatchRep = () => {
+        const b = document.getElementById('repBatch').value;
+        const d = transactions.filter(t=>t.batch===b);
+        const doc = new jsPDF(); doc.text(`Batch: ${b}`,14,20);
+        doc.autoTable({ startY:30, head:[['Date','Name','Father','Mobile','Amt']], body:d.map(t=>[t.dateStr,t.studentName,t.fatherName,t.studentPhone,t.amount]) });
+        doc.save("BatchReport.pdf");
+    }
+
+    window.generateDuesReport = () => {
+        const m={}; transactions.forEach(t=>{ const k=`${t.studentName}|${t.batch}`; if(!m[k]) m[k]=0; m[k]+=parseFloat(t.amount); });
+        const d = Object.keys(m).map(k=>{ const [n,b]=k.split('|'); return [n,b,m[k],1000-m[k]]; }).filter(x=>x[3]>0);
+        const doc = new jsPDF(); doc.text("Dues List",14,20);
+        doc.autoTable({ startY:30, head:[['Name','Batch','Paid','Due']], body:d });
+        doc.save("DuesList.pdf");
+    }
+
+    window.exportData = () => {
+        const a = document.createElement('a');
+        a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({fees:transactions, expenses:expenses}));
+        a.download = "CentreBackup.json"; document.body.appendChild(a); a.click(); a.remove();
+    }
+</script>
+</body>
+</html>
