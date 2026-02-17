@@ -400,35 +400,61 @@
     // Global State
     window.currentUserRole = null; 
 
-    // --- LOGIN FUNCTION ---
-    document.getElementById('loginForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const role = document.querySelector('input[name="role"]:checked').value;
-        const pass = document.getElementById('loginPass').value;
+  // --- UPDATED LOGIN WITH SESSION PERSISTENCE ---
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const role = document.querySelector('input[name="role"]:checked').value;
+    const pass = document.getElementById('loginPass').value;
+    
+    if(pass === CREDENTIALS[role]) {
+        window.currentUserRole = role;
         
-        if(pass === CREDENTIALS[role]) {
-            window.currentUserRole = role;
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('mainWrapper').classList.add('logged-in');
-            document.getElementById('loginPass').value = ''; 
-            
-            // Try to refresh tables if module is loaded
+        // Save status to browser memory
+        localStorage.setItem('erp_logged_in', 'true');
+        localStorage.setItem('erp_role', role);
+
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainWrapper').classList.add('logged-in');
+        document.getElementById('loginPass').value = ''; 
+        
+        if(window.renderFeeTable) window.renderFeeTable();
+        if(window.renderExpTable) window.renderExpTable();
+    } else {
+        alert("Wrong Password! Please try again.");
+        document.getElementById('loginPass').value = '';
+    }
+});
+
+// --- UPDATED LOGOUT ---
+window.logout = () => {
+    if(confirm("Are you sure you want to logout?")) {
+        window.currentUserRole = null;
+        // Clear browser memory on logout
+        localStorage.removeItem('erp_logged_in');
+        localStorage.removeItem('erp_role');
+        
+        document.getElementById('mainWrapper').classList.remove('logged-in');
+        document.getElementById('loginScreen').style.display = 'flex';
+    }
+}
+
+// --- NEW: AUTO-LOGIN ON PAGE LOAD ---
+window.addEventListener('load', () => {
+    const isLoggedIn = localStorage.getItem('erp_logged_in');
+    const savedRole = localStorage.getItem('erp_role');
+    
+    if (isLoggedIn === 'true') {
+        window.currentUserRole = savedRole;
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainWrapper').classList.add('logged-in');
+        
+        // Refresh tables if data is ready
+        setTimeout(() => {
             if(window.renderFeeTable) window.renderFeeTable();
             if(window.renderExpTable) window.renderExpTable();
-        } else {
-            alert("Wrong Password! Please try again.");
-            document.getElementById('loginPass').value = '';
-        }
-    });
-
-    // --- LOGOUT FUNCTION ---
-    window.logout = () => {
-        if(confirm("Are you sure you want to logout?")) {
-            window.currentUserRole = null;
-            document.getElementById('mainWrapper').classList.remove('logged-in');
-            document.getElementById('loginScreen').style.display = 'flex';
-        }
+        }, 1000);
     }
+});
 
     // --- NAVIGATION ---
     document.getElementById('sidebarCollapse').addEventListener('click', () => {
@@ -512,6 +538,7 @@
             window.renderFeeTable();
             window.updateAutoComplete();
             window.renderBatchChart();
+            window.transactions = transactions;
             window.updateDashboard();
             window.updateBatchList();
             document.getElementById('loadingOverlay').style.display = 'none';
@@ -522,39 +549,50 @@
             const data = snap.val();
             if(data) Object.keys(data).forEach(k => expenses.push({id:k, ...data[k]}));
             expenses.sort((a,b) => b.timestamp - a.timestamp);
+            window.expenses = expenses;
             window.renderExpTable();
-            window.updateDashboard();
+            window.updateDashboard()
         });
     }
 
     // --- FEE SUBMIT ---
-    document.getElementById('feeForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = document.getElementById('feeEditId').value;
-        const amt = parseFloat(document.getElementById('amount').value);
-        
-        if(!id) {
-            const prev = window.getStudentTotal(document.getElementById('sName').value, document.getElementById('batch').value);
-            if((prev+amt)>1000) return alert(`Max allowed: ₹${1000-prev}`);
-        }
+    // --- UPDATED FEE SUBMIT ---
+document.getElementById('feeForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const id = document.getElementById('feeEditId').value;
+    const amt = parseFloat(document.getElementById('amount').value);
+    
+    if(!id) {
+        const prev = window.getStudentTotal(document.getElementById('sName').value, document.getElementById('batch').value);
+        if((prev+amt)>1000) return alert(`Max allowed: ₹${1000-prev}`);
+    }
 
-        const data = {
-            receiptNo: id ? undefined : "SDC-" + Math.floor(100000 + Math.random() * 900000),
-            dateStr: new Date().toLocaleDateString('en-IN'),
-            studentName: document.getElementById('sName').value,
-            fatherName: document.getElementById('fName').value,
-            studentPhone: document.getElementById('sPhone').value,
-            village: document.getElementById('village').value,
-            course: document.getElementById('course').value,
-            batch: document.getElementById('batch').value,
-            amount: amt, 
-            receivedBy: document.getElementById('recBy').value,
-            timestamp: Date.now()
-        };
+    const data = {
+        receiptNo: id ? undefined : "SDC-" + Math.floor(100000 + Math.random() * 900000),
+        dateStr: new Date().toLocaleDateString('en-IN'),
+        studentName: document.getElementById('sName').value,
+        fatherName: document.getElementById('fName').value,
+        studentPhone: document.getElementById('sPhone').value,
+        village: document.getElementById('village').value,
+        course: document.getElementById('course').value,
+        batch: document.getElementById('batch').value,
+        amount: amt, 
+        receivedBy: document.getElementById('recBy').value,
+        payMode: document.getElementById('payMode').value, // NEW FIELD ADDED
+        timestamp: Date.now()
+    };
 
-        if(id) { delete data.receiptNo; update(ref(db,'fees/'+id), data).then(()=>{ alert("Updated"); window.resetFeeForm(); }); }
-        else { push(feeRef, data).then((snap)=>{ data.id=snap.key; window.generatePDF(data); window.resetFeeForm(); }); }
-    });
+    if(id) { 
+        delete data.receiptNo; 
+        update(ref(db,'fees/'+id), data).then(()=>{ alert("Updated"); window.resetFeeForm(); }); 
+    } else { 
+        push(feeRef, data).then((snap)=>{ 
+            data.id=snap.key; 
+            window.generatePDF(data); 
+            window.resetFeeForm(); 
+        }); 
+    }
+});
 
     window.resetFeeForm = () => {
         document.getElementById('feeForm').reset();
@@ -637,21 +675,26 @@
         }
     }
 
-    document.getElementById('expenseForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const type = document.getElementById('typeInc').checked ? 'credit' : 'debit';
-        const data = {
-            date: document.getElementById('expDate').value,
-            desc: document.getElementById('expDesc').value,
-            category: document.getElementById('expCat').value,
-            amount: parseFloat(document.getElementById('expAmount').value),
-            paidBy: document.getElementById('expBy').value,
-            type: type,
-            timestamp: Date.now()
-        };
-        push(expRef, data).then(()=>{ alert("Saved"); document.getElementById('expenseForm').reset(); window.toggleExpType(); });
+   // --- REPLACE THIS BLOCK TO FIX EXPENSE SAVING ---
+document.getElementById('expenseForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const type = document.getElementById('typeInc').checked ? 'credit' : 'debit';
+    const data = {
+        date: document.getElementById('expDate').value,
+        desc: document.getElementById('expDesc').value,
+        category: document.getElementById('expCat').value,
+        amount: parseFloat(document.getElementById('expAmount').value),
+        paidBy: document.getElementById('expBy').value,
+        expMode: document.getElementById('expMode').value, // THIS IS THE CRITICAL MISSING LINE
+        type: type,
+        timestamp: Date.now()
+    };
+    push(expRef, data).then(()=>{ 
+        alert("Saved Successfully"); 
+        document.getElementById('expenseForm').reset(); 
+        window.toggleExpType(); 
     });
-
+});
     window.renderExpTable = () => {
         const tb = document.getElementById('expTable'); tb.innerHTML='';
         expenses.forEach(x => {
@@ -859,7 +902,162 @@
         a.download = "CentreBackup.json"; document.body.appendChild(a); a.click(); a.remove();
     }
 </script>
+<script type="module">
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+    const db = getDatabase();
+    const feeRef = ref(db, 'fees');
+    const expRef = ref(db, 'expenses');
+    const histRef = ref(db, 'closing_history');
+
+    // --- 1. UI INJECTION ---
+    window.addEventListener('load', () => {
+        const feeRow = document.querySelector('#feeForm .row');
+        if (feeRow && !document.getElementById('payMode')) {
+            feeRow.insertAdjacentHTML('beforeend', `<div class="col-md-3"><div class="form-floating"><select class="form-select" id="payMode"><option value="Cash">Cash</option><option value="Bank">Bank</option></select><label>Payment Mode</label></div></div>`);
+        }
+        const expCat = document.getElementById('expCat');
+        if (expCat && !expCat.innerHTML.includes('Paid in Portal')) {
+            expCat.insertAdjacentHTML('beforeend', `<option value="Paid in Portal">Paid in Portal</option>`);
+        }
+        const expForm = document.getElementById('expenseForm');
+        if (expForm && !document.getElementById('expMode')) {
+            expForm.querySelector('.form-floating:nth-child(4)').insertAdjacentHTML('afterend', `<div class="form-floating mb-2"><select class="form-select" id="expMode"><option value="Cash">Cash</option><option value="Bank">Bank</option></select><label>Mode</label></div>`);
+        }
+
+        const dashRow = document.querySelector('#sec-dashboard .row.g-4');
+        if (dashRow && !document.getElementById('todayColl')) {
+            dashRow.insertAdjacentHTML('afterend', `
+                <div class="card-erp mt-4 border-start border-4 border-warning shadow-sm">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-secondary m-0"><i class="fas fa-calculator me-2"></i>Daily Real-time Summary</h6>
+                        <div class="btn-group">
+                            <button onclick="window.viewHistory()" class="btn btn-sm btn-outline-dark"><i class="fas fa-history"></i> History</button>
+                            <button onclick="window.sendDailyWA()" class="btn btn-sm btn-success"><i class="fab fa-whatsapp"></i> Report</button>
+                        </div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6 col-md-2 border-end"><small class="text-muted d-block">Today Inflow</small><span class="fw-bold text-dark fs-6" id="todayColl">₹0</span></div>
+                        <div class="col-6 col-md-2 border-end"><small class="text-muted d-block">Today Outflow</small><span class="fw-bold text-danger fs-6" id="todayExp">₹0</span></div>
+                        <div class="col-6 col-md-2 border-end"><small class="text-muted d-block text-success">Today Cash</small><span class="fw-bold text-success fs-6" id="todayCashCol">₹0</span></div>
+                        <div class="col-6 col-md-2 border-end"><small class="text-muted d-block text-primary">Today Bank</small><span class="fw-bold text-primary fs-6" id="todayBankCol">₹0</span></div>
+                        <div class="col-6 col-md-2 border-end"><small class="text-muted d-block">Cash in Hand</small><span class="fw-bold text-primary fs-6" id="cashInHand">₹0</span></div>
+                        <div class="col-6 col-md-2"><small class="text-muted d-block">At Bank</small><span class="fw-bold text-info fs-6" id="cashAtBank">₹0</span></div>
+                    </div>
+                </div>`);
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', `
+            <div class="modal fade" id="historyModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+                <div class="modal-header bg-dark text-white"><h5 class="modal-title">Closing Balance History</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body"><div class="table-responsive"><table class="table table-hover">
+                    <thead class="table-light"><tr><th>Date</th><th>Cash Col.</th><th>Bank Col.</th><th>Cash Hand</th><th>At Bank</th></tr></thead>
+                    <tbody id="historyTableBody"></tbody>
+                </table></div></div>
+            </div></div></div>`);
+
+        restoreFromBackup();
+    });
+
+    // --- 2. THE CORRECTED CALCULATION ENGINE ---
+    let localFees = [], localExps = [], historyData = [];
+
+    const runMasterCalc = () => {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const todayTime = today.getTime();
+
+        const parseToTime = (str) => {
+            if(!str) return 0;
+            let d;
+            if(str.includes('/')) { // DD/MM/YYYY
+                const p = str.split('/');
+                d = new Date(p[2], p[1]-1, p[0]);
+            } else { // YYYY-MM-DD
+                const p = str.split('-');
+                d = new Date(p[0], p[1]-1, p[2]);
+            }
+            d.setHours(0,0,0,0);
+            return d.getTime();
+        };
+
+        let tIn = 0, tOut = 0, tCashIn = 0, tBankIn = 0, cHand = 0, cBank = 0;
+
+        // Calculate all Fees
+        localFees.forEach(t => {
+            const amt = parseFloat(t.amount) || 0;
+            const isBank = String(t.payMode).toLowerCase() === 'bank';
+            const itemTime = parseToTime(t.dateStr);
+
+            if(itemTime === todayTime) {
+                tIn += amt;
+                if(isBank) tBankIn += amt; else tCashIn += amt;
+            }
+            if(isBank) cBank += amt; else cHand += amt;
+        });
+
+        // Calculate all Expenses
+        localExps.forEach(e => {
+            const amt = parseFloat(e.amount) || 0;
+            const isBank = String(e.expMode).toLowerCase() === 'bank';
+            const itemTime = parseToTime(e.date);
+
+            if (e.type === 'credit') {
+                if(itemTime === todayTime) { tIn += amt; if(isBank) tBankIn += amt; else tCashIn += amt; }
+                if(isBank) cBank += amt; else cHand += amt;
+            } else {
+                if(itemTime === todayTime) tOut += amt;
+                if(isBank) cBank -= amt; else cHand -= amt;
+            }
+        });
+
+        const res = { todayColl: tIn, todayExp: tOut, todayCashCol: tCashIn, todayBankCol: tBankIn, cashInHand: cHand, cashAtBank: cBank };
+        
+        // Auto-Save Daily Closing on Date Change
+        const storedDate = localStorage.getItem('erp_last_date');
+        const todayDateStr = new Date().toLocaleDateString('en-IN');
+        if(storedDate && storedDate !== todayDateStr) {
+            const lastData = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
+            if(lastData.todayColl !== undefined) {
+                set(ref(db, 'closing_history/' + storedDate.replace(/\//g, '-')), { ...lastData, date: storedDate, timestamp: Date.now() });
+            }
+        }
+        localStorage.setItem('erp_last_date', todayDateStr);
+
+        // Update UI and Backup
+        Object.keys(res).forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.innerText = '₹' + Math.round(res[id]).toLocaleString('en-IN');
+        });
+        sessionStorage.setItem('erp_backup', JSON.stringify(res));
+    };
+
+    // --- 3. UTILITIES ---
+    window.sendDailyWA = () => {
+        const d = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
+        const date = new Date().toLocaleDateString('en-IN');
+        let msg = `*📊 DAILY SUMMARY* %0A_Date: ${date}_ %0A%0A💰 *Today Inflow:* ₹${d.todayColl} %0A💸 *Today Outflow:* ₹${d.todayExp} %0A--------------------------- %0A💵 *Cash Col:* ₹${d.todayCashCol} %0A🏦 *Bank Col:* ₹${d.todayBankCol} %0A--------------------------- %0A🏧 *Cash Hand:* ₹${d.cashInHand} %0A💳 *At Bank:* ₹${d.cashAtBank}`;
+        window.open(`https://wa.me/919939056259?text=${msg}`, '_blank');
+    };
+
+    window.viewHistory = () => {
+        const tbody = document.getElementById('historyTableBody');
+        tbody.innerHTML = '';
+        historyData.sort((a,b) => b.timestamp - a.timestamp).forEach(h => {
+            tbody.innerHTML += `<tr><td>${h.date}</td><td>₹${h.todayCashCol}</td><td>₹${h.todayBankCol}</td><td class="fw-bold">₹${h.cashInHand}</td><td class="fw-bold">₹${h.cashAtBank}</td></tr>`;
+        });
+        new bootstrap.Modal(document.getElementById('historyModal')).show();
+    };
+
+    function restoreFromBackup() {
+        const b = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
+        Object.keys(b).forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerText = '₹' + b[id].toLocaleString('en-IN'); });
+    }
+
+    onValue(feeRef, (snap) => { localFees = snap.val() ? Object.values(snap.val()) : []; runMasterCalc(); });
+    onValue(expRef, (snap) => { localExps = snap.val() ? Object.values(snap.val()) : []; runMasterCalc(); });
+    onValue(histRef, (snap) => { historyData = snap.val() ? Object.values(snap.val()) : []; });
+</script>
 </body>
 
 </html>
-
