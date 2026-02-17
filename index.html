@@ -1036,7 +1036,7 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
     window.sendDailyWA = () => {
         const d = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
         const date = new Date().toLocaleDateString('en-IN');
-        let msg = `*📊 DAILY SUMMARY* %0A_Date: ${date}_ %0A%0A💰 *Today Inflow:* ₹${d.todayColl} %0A💸 *Today Outflow:* ₹${d.todayExp} %0A--------------------------- %0A💵 *Cash Col:* ₹${d.todayCashCol} %0A🏦 *Bank Col:* ₹${d.todayBankCol} %0A--------------------------- %0A🏧 *Cash Hand:* ₹${d.cashInHand} %0A💳 *At Bank:* ₹${d.cashAtBank} %0A*Report generated via Centre ERP*`; ;
+        let msg = `*📊 DAILY SUMMARY-KAUSHAL VIKASH KENDRA* %0A_Date: ${date}_ %0A%0A💰 *Today Inflow:* ₹${d.todayColl} %0A💸 *Today Outflow:* ₹${d.todayExp} %0A--------------------------- %0A💵 *Cash Col:* ₹${d.todayCashCol} %0A🏦 *Bank Col:* ₹${d.todayBankCol} %0A--------------------------- %0A🏧 *Cash Hand:* ₹${d.cashInHand} %0A💳 *At Bank:* ₹${d.cashAtBank} %0A%0A_Report generated via Centre ERP_`; ;
         window.open(`https://wa.me/919939056259?text=${msg}`, '_blank');
     };
 
@@ -1061,4 +1061,5 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
 </body>
 
 </html>
+
 
