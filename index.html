@@ -930,9 +930,9 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
             dashRow.insertAdjacentHTML('afterend', `
                 <div class="card-erp mt-4 border-start border-4 border-warning shadow-sm">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold text-secondary m-0"><i class="fas fa-calculator me-2"></i>Daily Real-time Summary</h6>
+                        <h6 class="fw-bold text-secondary m-0"><i class="fas fa-robot me-2"></i>Live Summary (Auto-Archive Active)</h6>
                         <div class="btn-group">
-                            <button onclick="window.viewHistory()" class="btn btn-sm btn-outline-dark"><i class="fas fa-history"></i> History</button>
+                            <button onclick="window.viewHistory()" class="btn btn-sm btn-outline-dark"><i class="fas fa-history"></i> View History</button>
                             <button onclick="window.sendDailyWA()" class="btn btn-sm btn-success"><i class="fab fa-whatsapp"></i> Report</button>
                         </div>
                     </div>
@@ -947,33 +947,51 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
                 </div>`);
         }
         
-        document.body.insertAdjacentHTML('beforeend', `
-            <div class="modal fade" id="historyModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
-                <div class="modal-header bg-dark text-white"><h5 class="modal-title">Closing Balance History</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body"><div class="table-responsive"><table class="table table-hover">
-                    <thead class="table-light"><tr><th>Date</th><th>Cash Col.</th><th>Bank Col.</th><th>Cash Hand</th><th>At Bank</th></tr></thead>
-                    <tbody id="historyTableBody"></tbody>
-                </table></div></div>
-            </div></div></div>`);
-
+        if(!document.getElementById('historyModal')){
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal fade" id="historyModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+                    <div class="modal-header bg-dark text-white"><h5 class="modal-title">Closing Balance History</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body"><div class="table-responsive"><table class="table table-hover">
+                        <thead class="table-light"><tr><th>Date</th><th>Cash Col.</th><th>Bank Col.</th><th>Cash Hand</th><th>At Bank</th></tr></thead>
+                        <tbody id="historyTableBody"></tbody>
+                    </table></div></div>
+                </div></div></div>`);
+        }
         restoreFromBackup();
     });
 
-    // --- 2. THE CORRECTED CALCULATION ENGINE ---
+    // --- 2. CALCULATION & AUTO-SAVE LOGIC ---
     let localFees = [], localExps = [], historyData = [];
 
     const runMasterCalc = () => {
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        const todayTime = today.getTime();
+        const todayObj = new Date();
+        const todayDateStr = todayObj.toLocaleDateString('en-IN');
+        todayObj.setHours(0,0,0,0);
+        const todayTime = todayObj.getTime();
+
+        // AUTO-SAVE ON DATE CHANGE DETECTION
+        const lastActiveDate = localStorage.getItem('erp_auto_save_date');
+        if(lastActiveDate && lastActiveDate !== todayDateStr) {
+            const lastKnownData = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
+            if(lastKnownData.todayColl !== undefined) {
+                // Archive the previous day's data before it gets cleared by the new day
+                set(ref(db, 'closing_history/' + lastActiveDate.replace(/\//g, '-')), { 
+                    ...lastKnownData, 
+                    date: lastActiveDate, 
+                    timestamp: Date.now(),
+                    saveType: 'Automatic'
+                });
+            }
+        }
+        localStorage.setItem('erp_auto_save_date', todayDateStr);
 
         const parseToTime = (str) => {
             if(!str) return 0;
             let d;
-            if(str.includes('/')) { // DD/MM/YYYY
+            if(str.includes('/')) {
                 const p = str.split('/');
                 d = new Date(p[2], p[1]-1, p[0]);
-            } else { // YYYY-MM-DD
+            } else {
                 const p = str.split('-');
                 d = new Date(p[0], p[1]-1, p[2]);
             }
@@ -983,12 +1001,10 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
 
         let tIn = 0, tOut = 0, tCashIn = 0, tBankIn = 0, cHand = 0, cBank = 0;
 
-        // Calculate all Fees
         localFees.forEach(t => {
             const amt = parseFloat(t.amount) || 0;
             const isBank = String(t.payMode).toLowerCase() === 'bank';
             const itemTime = parseToTime(t.dateStr);
-
             if(itemTime === todayTime) {
                 tIn += amt;
                 if(isBank) tBankIn += amt; else tCashIn += amt;
@@ -996,12 +1012,10 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
             if(isBank) cBank += amt; else cHand += amt;
         });
 
-        // Calculate all Expenses
         localExps.forEach(e => {
             const amt = parseFloat(e.amount) || 0;
             const isBank = String(e.expMode).toLowerCase() === 'bank';
             const itemTime = parseToTime(e.date);
-
             if (e.type === 'credit') {
                 if(itemTime === todayTime) { tIn += amt; if(isBank) tBankIn += amt; else tCashIn += amt; }
                 if(isBank) cBank += amt; else cHand += amt;
@@ -1013,18 +1027,6 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
 
         const res = { todayColl: tIn, todayExp: tOut, todayCashCol: tCashIn, todayBankCol: tBankIn, cashInHand: cHand, cashAtBank: cBank };
         
-        // Auto-Save Daily Closing on Date Change
-        const storedDate = localStorage.getItem('erp_last_date');
-        const todayDateStr = new Date().toLocaleDateString('en-IN');
-        if(storedDate && storedDate !== todayDateStr) {
-            const lastData = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
-            if(lastData.todayColl !== undefined) {
-                set(ref(db, 'closing_history/' + storedDate.replace(/\//g, '-')), { ...lastData, date: storedDate, timestamp: Date.now() });
-            }
-        }
-        localStorage.setItem('erp_last_date', todayDateStr);
-
-        // Update UI and Backup
         Object.keys(res).forEach(id => {
             const el = document.getElementById(id);
             if(el) el.innerText = '₹' + Math.round(res[id]).toLocaleString('en-IN');
@@ -1032,35 +1034,51 @@ document.getElementById('expenseForm').addEventListener('submit', (e) => {
         sessionStorage.setItem('erp_backup', JSON.stringify(res));
     };
 
-    // --- 3. UTILITIES ---
+    // --- 3. REPORT & HISTORY VIEW ---
     window.sendDailyWA = () => {
         const d = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
         const date = new Date().toLocaleDateString('en-IN');
-        let msg = `*📊 DAILY SUMMARY-KAUSHAL VIKASH KENDRA* %0A_Date: ${date}_ %0A%0A💰 *Today Inflow:* ₹${d.todayColl} %0A💸 *Today Outflow:* ₹${d.todayExp} %0A--------------------------- %0A💵 *Cash Col:* ₹${d.todayCashCol} %0A🏦 *Bank Col:* ₹${d.todayBankCol} %0A--------------------------- %0A🏧 *Cash Hand:* ₹${d.cashInHand} %0A💳 *At Bank:* ₹${d.cashAtBank} %0A%0A_Report generated via Centre ERP_`; ;
+        // Manual report also triggers an immediate archive save
+        set(ref(db, 'closing_history/' + date.replace(/\//g, '-')), { ...d, date: date, timestamp: Date.now(), saveType: 'Manual' });
+        
+        let msg = `*📊 DAILY SUMMARY - KAUSHAL VIKASH KENDRA* %0A_Date: ${date}_ %0A%0A💰 *Today Inflow:* ₹${d.todayColl} %0A💸 *Today Outflow:* ₹${d.todayExp} %0A--------------------------- %0A💵 *Cash Col:* ₹${d.todayCashCol} %0A🏦 *Bank Col:* ₹${d.todayBankCol} %0A--------------------------- %0A🏧 *Cash Hand:* ₹${d.cashInHand} %0A💳 *At Bank:* ₹${d.cashAtBank}`;
         window.open(`https://wa.me/919939056259?text=${msg}`, '_blank');
     };
 
     window.viewHistory = () => {
         const tbody = document.getElementById('historyTableBody');
-        tbody.innerHTML = '';
+        tbody.innerHTML = historyData.length ? '' : '<tr><td colspan="5" class="text-center">No history recorded yet.</td></tr>';
+        
         historyData.sort((a,b) => b.timestamp - a.timestamp).forEach(h => {
-            tbody.innerHTML += `<tr><td>${h.date}</td><td>₹${h.todayCashCol}</td><td>₹${h.todayBankCol}</td><td class="fw-bold">₹${h.cashInHand}</td><td class="fw-bold">₹${h.cashAtBank}</td></tr>`;
+            tbody.innerHTML += `<tr>
+                <td>${h.date} ${h.saveType === 'Automatic' ? '🤖' : '👤'}</td>
+                <td class="text-success">₹${(h.todayCashCol || 0).toLocaleString('en-IN')}</td>
+                <td class="text-primary">₹${(h.todayBankCol || 0).toLocaleString('en-IN')}</td>
+                <td class="fw-bold">₹${(h.cashInHand || 0).toLocaleString('en-IN')}</td>
+                <td class="fw-bold">₹${(h.cashAtBank || 0).toLocaleString('en-IN')}</td>
+            </tr>`;
         });
         new bootstrap.Modal(document.getElementById('historyModal')).show();
     };
 
     function restoreFromBackup() {
         const b = JSON.parse(sessionStorage.getItem('erp_backup') || '{}');
-        Object.keys(b).forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerText = '₹' + b[id].toLocaleString('en-IN'); });
+        Object.keys(b).forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerText = '₹' + (b[id] || 0).toLocaleString('en-IN'); });
     }
 
     onValue(feeRef, (snap) => { localFees = snap.val() ? Object.values(snap.val()) : []; runMasterCalc(); });
     onValue(expRef, (snap) => { localExps = snap.val() ? Object.values(snap.val()) : []; runMasterCalc(); });
-    onValue(histRef, (snap) => { historyData = snap.val() ? Object.values(snap.val()) : []; });
+    onValue(histRef, (snap) => { 
+        historyData = [];
+        const data = snap.val();
+        if(data) Object.keys(data).forEach(key => historyData.push(data[key]));
+    });
 </script>
+</body>
 </body>
 
 </html>
+
 
 
 
