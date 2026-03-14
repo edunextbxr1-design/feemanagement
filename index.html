@@ -856,39 +856,84 @@ window.addEventListener('load', () => {
     }
 
     window.generatePDF = (data) => {
-        const doc = new jsPDF();
-        const totalPaidSoFar = window.getStudentTotal(data.studentName, data.batch); 
-        const currentAmount = parseFloat(data.amount);
-        const remainingDue = 1000 - totalPaidSoFar;
-        
-        doc.setDrawColor(30, 58, 138); doc.rect(5, 5, 200, 138); 
-        doc.setFillColor(30, 58, 138); doc.rect(5, 5, 200, 28, 'F');
-        doc.setTextColor(255, 255, 255); doc.setFontSize(18);
-        doc.text("KAUSHAL VIKASH KENDRA", 105, 18, null, null, "center");
-        doc.setFontSize(10);
-        doc.text("Near Karubir Baba Temple, Simri Nagpura Road, Simri, Buxar", 105, 24, null, null, "center");
+    const doc = new jsPDF();
+    const totalPaidSoFar = window.getStudentTotal(data.studentName, data.batch); 
+    const currentAmount = parseFloat(data.amount);
+    const remainingDue = 1000 - totalPaidSoFar;
+    
+    const orgName = "KAUSHAL VIKASH KENDRA";
+    const orgAddr = "Near Karubir Baba Temple, Simri Nagpura Road, Simri, Buxar";
+    const orgPhone = "Mobile: 9939056259";
 
-        doc.setTextColor(0, 0, 0);
-        doc.text(`Receipt No: ${data.receiptNo || 'Pending'}`, 10, 42); doc.text(`Date: ${data.dateStr}`, 150, 42);
-        
-        doc.autoTable({
-            startY: 48, theme: 'plain', styles: { fontSize: 11 },
-            body: [['Student Name :', data.studentName.toUpperCase(), 'Course :', data.course],['Father Name :', data.fatherName, 'Batch :', data.batch]],
-        });
+    // Restore Professional Header & Border
+    doc.setDrawColor(30, 58, 138); doc.setLineWidth(1); doc.rect(5, 5, 200, 138); 
+    doc.setFillColor(30, 58, 138); doc.rect(5, 5, 200, 28, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+    doc.text(orgName, 105, 18, null, null, "center");
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+    doc.text(orgAddr, 105, 24, null, null, "center"); doc.text(orgPhone, 105, 29, null, null, "center");
 
-        doc.text(`Amount Paid: Rs. ${currentAmount}/-`, 20, 100);
-        doc.text(`Balance Due: Rs. ${remainingDue}/-`, 150, 100);
-        doc.save(`${data.studentName}_Receipt.pdf`);
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10);
+    doc.text(`Receipt No: ${data.receiptNo || 'Pending'}`, 10, 42); doc.text(`Date: ${data.dateStr}`, 150, 42);
+    doc.line(5, 45, 205, 45); 
+
+    // Restore Detailed Table
+    doc.autoTable({
+        startY: 48, margin: { left: 10 }, tableWidth: 190, theme: 'plain', styles: { fontSize: 11, cellPadding: 1.5 },
+        columnStyles: { 0: { fontStyle: 'bold', width: 40 }, 2: { fontStyle: 'bold', width: 30 } },
+        body: [
+            ['Student Name :', data.studentName.toUpperCase(), 'Course :', data.course],
+            ['Father Name :', data.fatherName, 'Batch :', data.batch],
+            ['Village/Address :', data.village, 'Mobile :', data.studentPhone || 'N/A'],
+            ['Payment Mode :', data.payMode || 'Cash', 'Staff :', data.receivedBy || 'Admin']
+        ],
+    });
+
+    // Restore Payment Breakdown Box
+    const finalY = doc.lastAutoTable.finalY + 5;
+    doc.setFillColor(245, 247, 250); doc.setDrawColor(200); doc.rect(10, finalY, 190, 25, 'FD');
+    doc.setFontSize(10); doc.setTextColor(100); doc.text("Payment Breakdown", 15, finalY + 6);
+    doc.setTextColor(0); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text(`Amount Paid: Rs. ${currentAmount}/-`, 20, finalY + 16);
+    
+    doc.setFontSize(10);
+    if(remainingDue <= 0) {
+        doc.setTextColor(22, 101, 52); doc.text("STATUS: FULLY PAID", 150, finalY + 16);
+    } else {
+        doc.setTextColor(185, 28, 28); doc.text(`Balance Due: Rs. ${remainingDue}/-`, 150, finalY + 16);
     }
+    doc.setFontSize(8); doc.setTextColor(100); doc.text(`Total Paid to Date: Rs. ${totalPaidSoFar}/-`, 20, finalY + 22);
+
+    // Restore Footer & Notes
+    const footerY = 125;
+    doc.setFontSize(9); doc.setTextColor(0);
+    doc.text(`Received By: ${data.receivedBy}`, 15, footerY); doc.text("Authorized Signature", 160, footerY);
+    doc.setDrawColor(0); doc.line(155, footerY - 5, 195, footerY - 5);
+    doc.setFontSize(7); doc.setTextColor(150);
+    doc.text("* Note: Security money will be refunded by BSDM upon successful completion of KYP course.", 105, 135, null, null, "center");
+    doc.text("Designed by Ira Education & IT Solutions Pvt. Ltd.", 105, 140, null, null, "center");
+    
+    doc.save(`${data.studentName}_Receipt.pdf`);
+}
 
     window.generateUC = () => {
-        const s = document.getElementById('ucStart').value; const e = document.getElementById('ucEnd').value;
-        if(!s||!e) return alert("Select Dates");
-        const doc = new jsPDF();
-        doc.text("UTILIZATION CERTIFICATE", 105, 20, null,null,"center");
-        doc.text(`Period: ${s} to ${e}`, 105, 28, null,null,"center");
-        doc.save("UC.pdf");
-    }
+    const s = document.getElementById('ucStart').value; const e = document.getElementById('ucEnd').value;
+    if(!s||!e) return alert("Select Dates");
+    const start=new Date(s), end=new Date(e);
+    let ob=0, inf=0, out=0, led=[];
+    const pD = (str) => str.includes('-') ? new Date(str) : new Date(str.split('/').reverse().join('-'));
+
+    transactions.forEach(t=>{ const d=pD(t.dateStr); if(d<start) ob+=parseFloat(t.amount); else if(d>=start && d<=end) { inf+=parseFloat(t.amount); led.push([t.dateStr, `Fee: ${t.studentName}`, 'Credit', t.amount, '-']); } });
+    expenses.forEach(x=>{ const d=new Date(x.date); if(d<start) { if(x.type==='credit') ob+=parseFloat(x.amount); else ob-=parseFloat(x.amount); } else if(d>=start && d<=end) { if(x.type==='credit') { inf+=parseFloat(x.amount); led.push([x.date, `Cap: ${x.desc}`, 'Credit', x.amount, '-']); } else { out+=parseFloat(x.amount); led.push([x.date, `Exp: ${x.desc}`, 'Debit', '-', x.amount]); } } });
+
+    const doc = new jsPDF();
+    doc.setFontSize(16); doc.text("UTILIZATION CERTIFICATE", 105, 20, null,null,"center");
+    doc.setFontSize(10); doc.text(`Period: ${s} to ${e}`, 105, 28, null,null,"center");
+    doc.autoTable({ startY:40, head:[['Summary','Amount']], body:[['Opening Bal',ob.toFixed(2)],['Inflow',inf.toFixed(2)],['Outflow',out.toFixed(2)],['Closing Bal',(ob+inf-out).toFixed(2)]] });
+    doc.text("Detailed Ledger", 14, doc.lastAutoTable.finalY+10);
+    doc.autoTable({ startY:doc.lastAutoTable.finalY+15, head:[['Date','Desc','Type','In','Out']], body:led });
+    doc.save("UC.pdf");
+}
 
     window.viewProf = (n) => {
         const h = transactions.filter(t=>t.studentName===n);
@@ -899,12 +944,32 @@ window.addEventListener('load', () => {
         new bootstrap.Modal(document.getElementById('profModal')).show();
     }
 
-    window.shareWA = (t) => {
-        const totalPaid = window.getStudentTotal(t.studentName, t.batch);
-        const rem = 1000 - totalPaid;
-        let msg = `*PAYMENT RECEIPT*%0AStudent: ${t.studentName}%0AReceived: ₹${t.amount}%0ADue: ₹${rem}`;
-        window.open(`https://wa.me/91${t.studentPhone}?text=${msg}`, '_blank');
+   window.shareWA = (t) => {
+    const totalPaid = window.getStudentTotal(t.studentName, t.batch);
+    const rem = 1000 - totalPaid;
+    let msg = "";
+    
+    if (rem <= 0) {
+        msg = `*FEE CLEARED - KAUSHAL VIKASH KENDRA* %0A%0A`;
+        msg += `Dear *${t.studentName}*,%0A`;
+        msg += `We have received your payment of *₹${t.amount}*.%0A%0A`;
+        msg += `✅ *Status:* FULLY PAID%0A`;
+        msg += `🎉 Your full security deposit of ₹1000 is settled.%0A%0A`;
+        msg += `_Simri Nagpura Road, Buxar_`;
+    } else {
+        msg = `*PAYMENT RECEIPT - KAUSHAL VIKASH KENDRA* %0A%0A`;
+        msg += `Dear *${t.studentName}*,%0A`;
+        msg += `Received: *₹${t.amount}* 💵%0A`;
+        msg += `Batch: ${t.batch}%0A`;
+        msg += `-----------------------------%0A`;
+        msg += `🔸 *Remaining Dues: ₹${rem}*%0A`;
+        msg += `-----------------------------%0A%0A`;
+        msg += `Please pay the balance soon.%0A`;
+        msg += `_Thank You!_`;
     }
+    const url = `https://wa.me/${t.studentPhone?('91'+t.studentPhone):''}?text=${msg}`;
+    window.open(url, '_blank');
+}
 
     window.genBatchRep = () => {
         const b = document.getElementById('repBatch').value;
@@ -1111,4 +1176,5 @@ window.addEventListener('load', () => {
 </script>
 </body>
 </body>
+
 </html>
