@@ -598,7 +598,7 @@ window.addEventListener('load', () => {
         const amt = parseFloat(document.getElementById('amount').value);
         
         if(!id) {
-            const prev = window.getStudentTotal(document.getElementById('sName').value, document.getElementById('batch').value);
+            const prev = window.getStudentTotal(document.getElementById('sName').value, document.getElementById('sPhone').value);
             if((prev+amt)>1000) return alert(`Max allowed: ₹${1000-prev}`);
         }
 
@@ -650,7 +650,7 @@ window.addEventListener('load', () => {
         tbody.innerHTML = '';
 
         let filteredData = transactions.filter(t => {
-            const totalPaid = window.getStudentTotal(t.studentName, t.batch);
+            const totalPaid = window.getStudentTotal(t.studentName, t.studentPhone);
             const isPaid = totalPaid >= 1000;
             
             const matchSearch = t.studentName.toLowerCase().includes(search) || (t.studentPhone && t.studentPhone.includes(search));
@@ -675,7 +675,7 @@ window.addEventListener('load', () => {
         const finalDisplay = limit === 'All' ? filteredData : filteredData.slice(0, parseInt(limit));
 
         finalDisplay.forEach(t => {
-            const tot = window.getStudentTotal(t.studentName, t.batch);
+            const tot = window.getStudentTotal(t.studentName, t.studentPhone);
             const due = 1000 - tot;
             const badge = tot >= 1000 ? '<span class="badge-status badge-paid">Settled</span>' : `<span class="badge-status badge-due">Due: ₹${due}</span>`;
             const payBtn = tot < 1000 ? `<button class="btn btn-icon btn-light text-dark" title="Pay Due" onclick='fillPayDue(${JSON.stringify(t)}, ${due})'><i class="fas fa-hand-holding-usd"></i></button>` : '';
@@ -706,7 +706,7 @@ window.addEventListener('load', () => {
         const statusF = document.getElementById('filterStatus').value;
 
         const dataToExport = transactions.filter(t => {
-            const tot = window.getStudentTotal(t.studentName, t.batch);
+            const tot = window.getStudentTotal(t.studentName, t.studentPhone);
             return (t.studentName.toLowerCase().includes(search)) && 
                    (batchF === 'All' || t.batch === batchF) && 
                    (statusF === 'All' || (statusF === 'Paid' && tot >= 1000) || (statusF === 'Due' && tot < 1000));
@@ -717,7 +717,7 @@ window.addEventListener('load', () => {
         doc.setFontSize(10);
         doc.text(`Generated: ${new Date().toLocaleString()} | Batch: ${batchF}`, 14, 22);
 
-        const rows = dataToExport.map(t => [t.dateStr, t.studentName, t.batch, `Rs. ${t.amount}`, (window.getStudentTotal(t.studentName, t.batch) >= 1000 ? 'Paid' : 'Due')]);
+        const rows = dataToExport.map(t => [t.dateStr, t.studentName, t.batch, `Rs. ${t.amount}`, (window.getStudentTotal(t.studentName, t.studentPhone) >= 1000 ? 'Paid' : 'Due')]);
         doc.autoTable({ startY: 30, head: [['Date', 'Student', 'Batch', 'Amount', 'Status']], body: rows, headStyles: { fillColor: [30, 58, 138] } });
         doc.save(`Fee_Report_${Date.now()}.pdf`);
     };
@@ -801,7 +801,7 @@ window.addEventListener('load', () => {
     }
 
     // --- UTILS ---
-    window.getStudentTotal = (n,b) => transactions.filter(t => t.studentName===n && t.batch===b).reduce((s,t)=>s+parseFloat(t.amount),0);
+    window.getStudentTotal = (name, phone) => transactions.filter(t => t.studentName === name && t.studentPhone === phone).reduce((s,t)=>s+parseFloat(t.amount),0);
     
     window.editFee = (id) => {
         const t = transactions.find(x => x.id===id); if(!t) return;
@@ -857,7 +857,7 @@ window.addEventListener('load', () => {
 
     window.generatePDF = (data) => {
     const doc = new jsPDF();
-    const totalPaidSoFar = window.getStudentTotal(data.studentName, data.batch); 
+    const totalPaidSoFar = window.getStudentTotal(data.studentName, data.studentPhone); 
     const currentAmount = parseFloat(data.amount);
     const remainingDue = 1000 - totalPaidSoFar;
     
@@ -945,7 +945,7 @@ window.addEventListener('load', () => {
     }
 
    window.shareWA = (t) => {
-    const totalPaid = window.getStudentTotal(t.studentName, t.batch);
+    const totalPaid = window.getStudentTotal(t.studentName, t.studentPhone);
     const rem = 1000 - totalPaid;
     let msg = "";
     
